@@ -1,18 +1,22 @@
 #include "FadeAnimation.h"
+#include <math.h>
 
-FadeAnimation::FadeAnimation(LedStrip *strip, unsigned int count, unsigned int speed, uint32_t colour) {
+FadeAnimation::FadeAnimation(LedStrip *strip, unsigned int count, unsigned int speed) {
     _state = FadeAnimation::OFF;
     _count = count;
     _speed = speed;
     _lastMillis = millis();
     _strip = strip;
-    splitColour(colour);
+    _current_brightness = 0;
 }
 
-void FadeAnimation::splitColour(uint32_t colour) {
-    _red = (uint8_t) ((colour >> 16) & 0xFF);
-    _green = (uint8_t) ((colour >> 8) & 0xFF);
-    _blue = (uint8_t) (colour & 0xFF);
+uint32_t FadeAnimation::adjustColour(uint32_t colour) {
+    float percentage = (float)_current_brightness / 255.0f;
+    uint8_t red = (uint8_t) fmin(255, ceil(((colour >> 16) & 0xFF) * percentage));
+    uint8_t green = (uint8_t) fmin(255, ceil(((colour >> 8) & 0xFF) * percentage));
+    uint8_t blue = (uint8_t) fmin(255, ceil((colour & 0xFF) * percentage));
+
+    return composeColour(red, green, blue);
 }
 
 uint32_t FadeAnimation::composeColour(uint8_t red, uint8_t green, uint8_t blue) {
@@ -20,96 +24,65 @@ uint32_t FadeAnimation::composeColour(uint8_t red, uint8_t green, uint8_t blue) 
 }
 
 
-void FadeAnimation::turnOn() {
+void FadeAnimation::turnOn(ColourProvider* colourProvider) {
     if (_state == FadeAnimation::OFF || _state == FadeAnimation::TURNING_OFF) {
         _state = FadeAnimation::TURNING_ON;
     }
 };
 
-void FadeAnimation::turnOff() {
+void FadeAnimation::turnOff(ColourProvider* colourProvider) {
     if (_state == FadeAnimation::ON || _state == FadeAnimation::TURNING_ON) {
         _state = FadeAnimation::TURNING_OFF;
     }
 };
 
-void FadeAnimation::loop() {
+void FadeAnimation::loop(ColourProvider* colourProvider) {
     if (_state == FadeAnimation::TURNING_ON) {
-        handleTurningOn();
+        handleTurningOn(colourProvider);
     } else if (_state == FadeAnimation::TURNING_OFF) {
-        handleTurningOff();
+        handleTurningOff(colourProvider);
     }
 };
 
-void FadeAnimation::handleTurningOn() {
+void FadeAnimation::handleTurningOn(ColourProvider* colourProvider) {
     unsigned long currentMillis = millis();
     if (currentMillis > (_lastMillis + _speed)) {
 
-        if (_current_red < _red) {
-            _current_red += (_red - _current_red) / _current_step;
-        }
+        _current_brightness++;
 
-        if (_current_green < _green) {
-            _current_green += (_green - _current_green) / _current_step;
-        }
-
-        if (_current_blue < _blue) {
-            _current_blue += (_blue - _current_blue) / _current_step;
-        }
-
-        _current_step -= 1;
-
-        if (_current_step == 1) {
-            _current_red = _red;
-            _current_green = _green;
-            _current_blue = _blue;
+        if (_current_brightness >= 255) {
+            _current_brightness = 255;
             _state = FadeAnimation::ON;
         }
 
-        uint32_t colour = composeColour(_current_red, _current_green, _current_blue);
-
         for (unsigned int offset = 0; offset < _count; offset++) {
-            _strip -> setPixelColour(offset, colour);
+            uint32_t colour = colourProvider -> getColour(offset);
+            _strip -> setPixelColour(offset, adjustColour(colour));
         }
 
         _strip -> update();
 
         _lastMillis = currentMillis;
     }
-}
+};
 
-void FadeAnimation::handleTurningOff() {
+void FadeAnimation::handleTurningOff(ColourProvider* colourProvider) {
     unsigned long currentMillis = millis();
     if (currentMillis > (_lastMillis + _speed)) {
 
-        if (_current_red > 0) {
-            _current_red -= (_current_red / (_steps - _current_step));
-        }
+        _current_brightness--;
 
-        if (_current_green > 0) {
-            _current_green -= (_current_green / (_steps - _current_step));
-        }
-
-        if (_current_blue > 0) {
-            _current_blue -= (_current_blue / (_steps - _current_step));
-        }
-
-        _current_step += 1;
-
-        if (_current_step == _steps) {
-            _current_red = 0;
-            _current_green = 0;
-            _current_blue = 0;
+        if (_current_brightness <= 0) {
+            _current_brightness = 0;
             _state = FadeAnimation::OFF;
         }
 
-        uint32_t colour = composeColour(_current_red, _current_green, _current_blue);
-
         for (unsigned int offset = 0; offset < _count; offset++) {
-            _strip -> setPixelColour(offset, colour);
+            uint32_t colour = colourProvider -> getColour(offset);
+            _strip -> setPixelColour(offset, adjustColour(colour));
         }
 
         _strip -> update();
-
 
         _lastMillis = currentMillis;
     }
@@ -117,10 +90,7 @@ void FadeAnimation::handleTurningOff() {
 
 void FadeAnimation::resetAnimation() {
     _strip -> clear();
-    _current_green = 0;
-    _current_red = 0;
-    _current_blue = 0;
-    _current_step = _steps;
+    _current_brightness = 0;
     _state = FadeAnimation::OFF;
 }
 
@@ -130,12 +100,4 @@ void FadeAnimation::setSpeed(unsigned int speed) {
 
 int FadeAnimation::getSpeed() {
     return _speed;
-}
-
-void FadeAnimation::setColour(uint32_t colour) {
-    splitColour(colour);
-}
-
-uint32_t FadeAnimation::getColour() {
-    return composeColour(_red, _green, _blue);
 }
