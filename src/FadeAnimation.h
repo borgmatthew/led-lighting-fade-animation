@@ -39,6 +39,8 @@ private:
 
     void handleTurningOff(ColourProvider* colourProvider);
 
+    void handleOn(ColourProvider* colourProvider);
+
     uint32_t adjustColour(uint32_t colour);
 
     uint32_t composeColour(uint8_t red, uint8_t green, uint8_t blue);

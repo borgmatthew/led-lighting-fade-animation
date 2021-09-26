@@ -41,6 +41,8 @@ void FadeAnimation::loop(ColourProvider* colourProvider) {
         handleTurningOn(colourProvider);
     } else if (_state == FadeAnimation::TURNING_OFF) {
         handleTurningOff(colourProvider);
+    } else if (_state == FadeAnimation::ON) {
+        handleOn(colourProvider);
     }
 };
 
@@ -86,6 +88,14 @@ void FadeAnimation::handleTurningOff(ColourProvider* colourProvider) {
 
         _lastMillis = currentMillis;
     }
+}
+
+void FadeAnimation::handleOn(ColourProvider *colourProvider) {
+    for(int i = 0; i < _count; i++) {
+        uint32_t colour = colourProvider -> getColour(i);
+        _strip -> setPixelColour(i, colour);
+    }
+    _strip -> update();
 }
 
 void FadeAnimation::resetAnimation() {
